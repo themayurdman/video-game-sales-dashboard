@@ -1,206 +1,220 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-import re
 
-# -----------------------------
-# PAGE SETTINGS
-# -----------------------------
-st.set_page_config(page_title="Video Game Sales Analysis", layout="wide")
-st.title("Video Game Sales Web App")
-st.write("This app loads, cleans, analyzes, and visualizes video game sales data.")
+st.set_page_config(page_title="Video Game Sales Dashboard", layout="wide")
 
-# -----------------------------
-# LOAD DATA
-# -----------------------------
-csv_path = r"C:\Users\xavie\OneDrive\BdatProgramming\Project\vgsales (1).csv"
-df = pd.read_csv(csv_path)
+st.title("🎮 Video Game Sales Analytics Dashboard")
+st.markdown("Upload a **video game sales CSV** file and explore trends by year, genre, platform, and publisher.")
 
-# -----------------------------
-# DATA CLEANING
-# -----------------------------
-# Rename columns for easier reading in the app
-df = df.rename(columns={
-    "Name": "Game_Name",
-    "Year": "Release_Year",
-    "NA_Sales": "North_America_Sales",
-    "EU_Sales": "Europe_Sales",
-    "JP_Sales": "Japan_Sales",
-    "Other_Sales": "Other_Region_Sales",
-    "Global_Sales": "Global_Sales"
-})
+with st.expander("Expected columns"):
+    st.write([
+        "Name", "Platform", "Year", "Genre", "Publisher",
+        "NA_Sales", "EU_Sales", "JP_Sales", "Other_Sales", "Global_Sales"
+    ])
 
-# Remove duplicate rows
-df = df.drop_duplicates()
+uploaded_file = st.file_uploader("Upload CSV file", type=["csv"])
 
-# Fill missing publisher with "Unknown"
-df["Publisher"] = df["Publisher"].fillna("Unknown")
+if uploaded_file is None:
+    st.info("Please upload your dataset to start the analysis.")
+    st.stop()
 
-# Fill missing year with median year
-median_year = int(df["Release_Year"].median())
-df["Release_Year"] = df["Release_Year"].fillna(median_year)
+# -----------------------
+# Load and clean data
+# -----------------------
+try:
+    df = pd.read_csv(uploaded_file)
+except Exception as e:
+    st.error(f"Error reading CSV file: {e}")
+    st.stop()
 
-# Convert year to integer
-df["Release_Year"] = df["Release_Year"].astype(int)
-
-# Create a full label similar to the student full name example
-df["Game_Label"] = df["Game_Name"] + " (" + df["Platform"] + ")"
-
-# -----------------------------
-# SIDEBAR FILTERS
-# -----------------------------
-st.sidebar.header("Filter Options")
-
-selected_genre = st.sidebar.selectbox(
-    "Select Genre",
-    ["All"] + sorted(df["Genre"].unique().tolist())
-)
-
-selected_platform = st.sidebar.selectbox(
-    "Select Platform",
-    ["All"] + sorted(df["Platform"].unique().tolist())
-)
-
-year_range = st.sidebar.slider(
-    "Select Release Year Range",
-    min_value=int(df["Release_Year"].min()),
-    max_value=int(df["Release_Year"].max()),
-    value=(int(df["Release_Year"].min()), int(df["Release_Year"].max()))
-)
-
-name_pattern = st.sidebar.text_input("Search game names starting with letter(s)", "")
-
-# -----------------------------
-# APPLY FILTERS
-# -----------------------------
-filtered_df = df.copy()
-
-if selected_genre != "All":
-    filtered_df = filtered_df[filtered_df["Genre"] == selected_genre]
-
-if selected_platform != "All":
-    filtered_df = filtered_df[filtered_df["Platform"] == selected_platform]
-
-filtered_df = filtered_df[
-    (filtered_df["Release_Year"] >= year_range[0]) &
-    (filtered_df["Release_Year"] <= year_range[1])
+required_columns = [
+    "Name", "Platform", "Year", "Genre", "Publisher", "Global_Sales"
 ]
+missing_columns = [col for col in required_columns if col not in df.columns]
 
-# Regex filter like the demo
-if name_pattern.strip() != "":
-    pattern = rf"^{re.escape(name_pattern)}"
-    filtered_df = filtered_df[
-        filtered_df["Game_Name"].str.contains(pattern, case=False, na=False, regex=True)
-    ]
+if missing_columns:
+    st.error(f"Missing required columns: {missing_columns}")
+    st.stop()
 
-# -----------------------------
-# SHOW DATA
-# -----------------------------
-st.header("Dataset Preview")
-st.write("Original dataset size:", df.shape)
-st.write("Filtered dataset size:", filtered_df.shape)
-st.dataframe(filtered_df.head(20))
+numeric_cols = ["Year", "NA_Sales", "EU_Sales", "JP_Sales", "Other_Sales", "Global_Sales"]
+for col in numeric_cols:
+    if col in df.columns:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
 
-# -----------------------------
-# METRICS
-# -----------------------------
-st.header("Important Metrics")
+before_rows = len(df)
+df = df.dropna(subset=["Name", "Platform", "Year", "Genre", "Publisher", "Global_Sales"]).copy()
+df["Year"] = df["Year"].astype(int)
+after_rows = len(df)
 
-total_games = filtered_df.shape[0]
+# -----------------------
+# Sidebar filters
+# -----------------------
+st.sidebar.header("Filter Data")
+
+year_min = int(df["Year"].min())
+year_max = int(df["Year"].max())
+selected_years = st.sidebar.slider("Select Year Range", year_min, year_max, (year_min, year_max))
+
+genre_options = sorted(df["Genre"].dropna().unique().tolist())
+platform_options = sorted(df["Platform"].dropna().unique().tolist())
+publisher_options = sorted(df["Publisher"].dropna().unique().tolist())
+
+selected_genres = st.sidebar.multiselect("Select Genre(s)", genre_options, default=genre_options)
+selected_platforms = st.sidebar.multiselect("Select Platform(s)", platform_options, default=platform_options)
+selected_publishers = st.sidebar.multiselect("Select Publisher(s)", publisher_options, default=publisher_options)
+
+filtered_df = df[
+    (df["Year"].between(selected_years[0], selected_years[1])) &
+    (df["Genre"].isin(selected_genres)) &
+    (df["Platform"].isin(selected_platforms)) &
+    (df["Publisher"].isin(selected_publishers))
+].copy()
+
+if filtered_df.empty:
+    st.warning("No data available for the selected filters.")
+    st.stop()
+
+# -----------------------
+# Project summary
+# -----------------------
+col_info1, col_info2 = st.columns([2, 1])
+with col_info1:
+    st.subheader("Project Summary")
+    st.write(
+        """
+        This Streamlit application analyzes video game sales data from a CSV file.
+        It cleans the data, applies interactive filters, calculates key business metrics,
+        and visualizes trends using charts.
+        """
+    )
+with col_info2:
+    st.subheader("Data Cleaning")
+    st.write(f"Rows before cleaning: **{before_rows}**")
+    st.write(f"Rows after cleaning: **{after_rows}**")
+
+st.divider()
+
+# -----------------------
+# Key metrics
+# -----------------------
 total_global_sales = filtered_df["Global_Sales"].sum()
-average_global_sales = filtered_df["Global_Sales"].mean()
+total_games = filtered_df["Name"].nunique()
+top_game_row = filtered_df.loc[filtered_df["Global_Sales"].idxmax()]
+top_platform = (
+    filtered_df.groupby("Platform")["Global_Sales"]
+    .sum()
+    .sort_values(ascending=False)
+    .index[0]
+)
+top_genre = (
+    filtered_df.groupby("Genre")["Global_Sales"]
+    .sum()
+    .sort_values(ascending=False)
+    .index[0]
+)
 
-if total_games > 0:
-    top_game = filtered_df.loc[filtered_df["Global_Sales"].idxmax(), "Game_Name"]
-else:
-    top_game = "No data"
+m1, m2, m3, m4 = st.columns(4)
+m1.metric("Total Global Sales", f"{total_global_sales:,.2f} M")
+m2.metric("Unique Games", f"{total_games:,}")
+m3.metric("Top Platform", top_platform)
+m4.metric("Top Genre", top_genre)
 
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Total Games", total_games)
-col2.metric("Total Global Sales", f"{total_global_sales:.2f} million")
-col3.metric("Average Global Sales", f"{average_global_sales:.2f} million" if total_games > 0 else "0.00 million")
-col4.metric("Top Game", top_game)
+st.write(f"**Top Game by Global Sales:** {top_game_row['Name']} ({top_game_row['Global_Sales']:.2f} M)")
 
-# -----------------------------
-# CHART 1: TOP 10 GAMES
-# -----------------------------
-st.header("Top 10 Games by Global Sales")
+st.divider()
 
-if total_games > 0:
-    top_10_games = filtered_df.nlargest(10, "Global_Sales")[["Game_Name", "Global_Sales"]]
+# -----------------------
+# Data preview
+# -----------------------
+st.subheader("Filtered Dataset Preview")
+st.dataframe(filtered_df.head(20), use_container_width=True)
 
-    fig1, ax1 = plt.subplots(figsize=(10, 5))
-    ax1.bar(top_10_games["Game_Name"], top_10_games["Global_Sales"])
-    ax1.set_title("Top 10 Games by Global Sales")
-    ax1.set_xlabel("Game Name")
-    ax1.set_ylabel("Global Sales (millions)")
-    plt.xticks(rotation=45, ha="right")
-    st.pyplot(fig1)
-else:
-    st.warning("No data available for this chart.")
+# -----------------------
+# Analysis tables
+# -----------------------
+left_table, right_table = st.columns(2)
 
-# -----------------------------
-# CHART 2: SALES BY GENRE
-# -----------------------------
-st.header("Global Sales by Genre")
+with left_table:
+    st.subheader("Top 10 Games by Global Sales")
+    top_games = (
+        filtered_df.groupby("Name", as_index=False)["Global_Sales"]
+        .sum()
+        .sort_values("Global_Sales", ascending=False)
+        .head(10)
+    )
+    st.dataframe(top_games, use_container_width=True)
 
-if total_games > 0:
-    genre_sales = filtered_df.groupby("Genre")["Global_Sales"].sum().sort_values(ascending=False)
+with right_table:
+    st.subheader("Sales by Platform")
+    sales_by_platform = (
+        filtered_df.groupby("Platform", as_index=False)["Global_Sales"]
+        .sum()
+        .sort_values("Global_Sales", ascending=False)
+    )
+    st.dataframe(sales_by_platform, use_container_width=True)
 
-    fig2, ax2 = plt.subplots(figsize=(10, 5))
-    ax2.bar(genre_sales.index, genre_sales.values)
-    ax2.set_title("Global Sales by Genre")
-    ax2.set_xlabel("Genre")
-    ax2.set_ylabel("Global Sales (millions)")
-    plt.xticks(rotation=45)
-    st.pyplot(fig2)
-else:
-    st.warning("No data available for this chart.")
+st.divider()
 
-# -----------------------------
-# CHART 3: SALES TREND BY YEAR
-# -----------------------------
-st.header("Global Sales Trend by Release Year")
+# -----------------------
+# Charts
+# -----------------------
+st.subheader("Visualizations")
 
-if total_games > 0:
-    yearly_sales = filtered_df.groupby("Release_Year")["Global_Sales"].sum().sort_index()
+# 1. Sales by Genre
+genre_sales = (
+    filtered_df.groupby("Genre")["Global_Sales"]
+    .sum()
+    .sort_values(ascending=False)
+)
 
-    fig3, ax3 = plt.subplots(figsize=(10, 5))
-    ax3.plot(yearly_sales.index, yearly_sales.values, marker="o")
-    ax3.set_title("Global Sales Trend by Release Year")
-    ax3.set_xlabel("Release Year")
-    ax3.set_ylabel("Global Sales (millions)")
-    st.pyplot(fig3)
-else:
-    st.warning("No data available for this chart.")
+fig1, ax1 = plt.subplots(figsize=(10, 5))
+genre_sales.plot(kind="bar", ax=ax1)
+ax1.set_title("Global Sales by Genre")
+ax1.set_xlabel("Genre")
+ax1.set_ylabel("Global Sales (Millions)")
+ax1.tick_params(axis="x", rotation=45)
+st.pyplot(fig1)
 
-# -----------------------------
-# CHART 4: NA VS EU SALES
-# -----------------------------
-st.header("North America Sales vs Europe Sales")
+# 2. Sales by Year
+year_sales = (
+    filtered_df.groupby("Year")["Global_Sales"]
+    .sum()
+    .sort_index()
+)
 
-if total_games > 0:
-    fig4, ax4 = plt.subplots(figsize=(8, 5))
-    ax4.scatter(filtered_df["North_America_Sales"], filtered_df["Europe_Sales"])
-    ax4.set_title("North America Sales vs Europe Sales")
-    ax4.set_xlabel("North America Sales (millions)")
-    ax4.set_ylabel("Europe Sales (millions)")
-    st.pyplot(fig4)
-else:
-    st.warning("No data available for this chart.")
+fig2, ax2 = plt.subplots(figsize=(10, 5))
+year_sales.plot(kind="line", marker="o", ax=ax2)
+ax2.set_title("Global Sales Trend by Year")
+ax2.set_xlabel("Year")
+ax2.set_ylabel("Global Sales (Millions)")
+st.pyplot(fig2)
 
-# -----------------------------
-# SUMMARY TABLE
-# -----------------------------
-st.header("Summary Table by Platform")
+# 3. Top 10 Platforms
+platform_sales = (
+    filtered_df.groupby("Platform")["Global_Sales"]
+    .sum()
+    .sort_values(ascending=False)
+    .head(10)
+)
 
-if total_games > 0:
-    platform_summary = filtered_df.groupby("Platform").agg(
-        Number_of_Games=("Game_Name", "count"),
-        Total_Global_Sales=("Global_Sales", "sum"),
-        Average_Global_Sales=("Global_Sales", "mean")
-    ).sort_values(by="Total_Global_Sales", ascending=False)
+fig3, ax3 = plt.subplots(figsize=(10, 5))
+platform_sales.plot(kind="bar", ax=ax3)
+ax3.set_title("Top 10 Platforms by Global Sales")
+ax3.set_xlabel("Platform")
+ax3.set_ylabel("Global Sales (Millions)")
+ax3.tick_params(axis="x", rotation=45)
+st.pyplot(fig3)
 
-    st.dataframe(platform_summary)
-else:
-    st.warning("No data available for summary table.")
+# -----------------------
+# Download section
+# -----------------------
+st.divider()
+st.subheader("Download Filtered Data")
+csv = filtered_df.to_csv(index=False).encode("utf-8")
+st.download_button(
+    label="Download filtered dataset as CSV",
+    data=csv,
+    file_name="filtered_video_game_sales.csv",
+    mime="text/csv"
+)
