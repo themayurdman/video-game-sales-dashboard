@@ -19,9 +19,9 @@ if uploaded_file is None:
     st.info("Please upload your dataset to start the analysis.")
     st.stop()
 
-# -----------------------
+
 # Load and clean data
-# -----------------------
+
 try:
     df = pd.read_csv(uploaded_file)
 except Exception as e:
@@ -47,9 +47,9 @@ df = df.dropna(subset=["Name", "Platform", "Year", "Genre", "Publisher", "Global
 df["Year"] = df["Year"].astype(int)
 after_rows = len(df)
 
-# -----------------------
+
 # Sidebar filters
-# -----------------------
+
 st.sidebar.header("Filter Data")
 
 year_min = int(df["Year"].min())
@@ -75,9 +75,9 @@ if filtered_df.empty:
     st.warning("No data available for the selected filters.")
     st.stop()
 
-# -----------------------
+
 # Project summary
-# -----------------------
+
 col_info1, col_info2 = st.columns([2, 1])
 with col_info1:
     st.subheader("Project Summary")
@@ -95,9 +95,9 @@ with col_info2:
 
 st.divider()
 
-# -----------------------
+
 # Key metrics
-# -----------------------
+
 total_global_sales = filtered_df["Global_Sales"].sum()
 total_games = filtered_df["Name"].nunique()
 top_game_row = filtered_df.loc[filtered_df["Global_Sales"].idxmax()]
@@ -124,15 +124,15 @@ st.write(f"**Top Game by Global Sales:** {top_game_row['Name']} ({top_game_row['
 
 st.divider()
 
-# -----------------------
+
 # Data preview
-# -----------------------
+
 st.subheader("Filtered Dataset Preview")
 st.dataframe(filtered_df.head(20), use_container_width=True)
 
-# -----------------------
+
 # Analysis tables
-# -----------------------
+
 left_table, right_table = st.columns(2)
 
 with left_table:
@@ -156,9 +156,9 @@ with right_table:
 
 st.divider()
 
-# -----------------------
+
 # Charts
-# -----------------------
+
 st.subheader("Visualizations")
 
 # 1. Sales by Genre
@@ -206,9 +206,9 @@ ax3.set_ylabel("Global Sales (Millions)")
 ax3.tick_params(axis="x", rotation=45)
 st.pyplot(fig3)
 
-# -----------------------
+
 # Download section
-# -----------------------
+
 st.divider()
 st.subheader("Download Filtered Data")
 csv = filtered_df.to_csv(index=False).encode("utf-8")
